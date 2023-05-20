@@ -21,7 +21,7 @@ class PaymentService {
      */
     List<Payment> findPaymentsSortedByDateAsc() {
         return getPaymentStream()
-                .sorted(getPaymentDateComparator())
+                .sorted(Comparator.comparing(Payment::getPaymentDate))
                 .toList();
     }
 
@@ -30,7 +30,7 @@ class PaymentService {
      */
     List<Payment> findPaymentsSortedByDateDesc() {
         return getPaymentStream()
-                .sorted(getPaymentDateComparator().reversed())
+                .sorted(Comparator.comparing(Payment::getPaymentDate).reversed())
                 .toList();
     }
 
@@ -39,7 +39,7 @@ class PaymentService {
      */
     List<Payment> findPaymentsSortedByItemCountAsc() {
         return getPaymentStream()
-                .sorted(getPaymentItemsSizeComparator())
+                .sorted(Comparator.comparing(payment -> payment.getPaymentItems().size()))
                 .toList();
     }
 
@@ -48,7 +48,7 @@ class PaymentService {
      */
     List<Payment> findPaymentsSortedByItemCountDesc() {
         return getPaymentStream()
-                .sorted(getPaymentItemsSizeComparator().reversed())
+                .sorted(Comparator.comparing((Payment payment) -> payment.getPaymentItems().size()).reversed())
                 .toList();
     }
 
@@ -56,10 +56,8 @@ class PaymentService {
     Znajdź i zwróć płatności dla wskazanego miesiąca
      */
     List<Payment> findPaymentsForGivenMonth(YearMonth yearMonth) {
-        Month month = yearMonth.getMonth();
-
         return getPaymentStream()
-                .filter(payment -> isPaymentInGivenMonth(payment, month))
+                .filter(payment -> YearMonth.from(payment.getPaymentDate()).equals(yearMonth))
                 .toList();
     }
 
@@ -67,12 +65,7 @@ class PaymentService {
     Znajdź i zwróć płatności dla aktualnego miesiąca
      */
     List<Payment> findPaymentsForCurrentMonth() {
-        Month month = dateTimeProvider.zonedDateTimeNow().getMonth();
-        int year = dateTimeProvider.zonedDateTimeNow().getYear();
-
-        return getPaymentStream()
-                .filter(payment -> isPaymentInGivenMonth(payment, month) && isPaymentInGivenYear(payment, year))
-                .toList();
+        return findPaymentsForGivenMonth(dateTimeProvider.yearMonthNow());
     }
 
     /*
@@ -100,12 +93,8 @@ class PaymentService {
     Znajdź i zwróć nazwy produktów sprzedanych w aktualnym miesiącu
      */
     Set<String> findProductsSoldInCurrentMonth() {
-        ZonedDateTime zonedDateTime = dateTimeProvider.zonedDateTimeNow();
-        Month month = zonedDateTime.getMonth();
-        int year = zonedDateTime.getYear();
-
-        return getPaymentStream()
-                .filter(payment -> isPaymentInGivenMonth(payment, month) && isPaymentInGivenYear(payment, year))
+        return findPaymentsForCurrentMonth()
+                .stream()
                 .map(Payment::getPaymentItems)
                 .flatMap(Collection::stream)
                 .map(PaymentItem::getName)
@@ -116,11 +105,8 @@ class PaymentService {
     Policz i zwróć sumę sprzedaży dla wskazanego miesiąca
      */
     BigDecimal sumTotalForGivenMonth(YearMonth yearMonth) {
-        int year = yearMonth.getYear();
-        Month month = yearMonth.getMonth();
-
-        return getPaymentStream()
-                .filter(payment -> isPaymentInGivenMonth(payment, month) && isPaymentInGivenYear(payment, year))
+        return findPaymentsForGivenMonth(yearMonth)
+                .stream()
                 .map(Payment::getPaymentItems)
                 .flatMap(Collection::stream)
                 .map(PaymentItem::getFinalPrice)
@@ -131,11 +117,8 @@ class PaymentService {
     Policz i zwróć sumę przyznanych rabatów dla wskazanego miesiąca
      */
     BigDecimal sumDiscountForGivenMonth(YearMonth yearMonth) {
-        int year = yearMonth.getYear();
-        Month month = yearMonth.getMonth();
-
-        return getPaymentStream()
-                .filter(payment -> isPaymentInGivenMonth(payment, month) && isPaymentInGivenYear(payment, year))
+        return findPaymentsForGivenMonth(yearMonth)
+                .stream()
                 .map(Payment::getPaymentItems)
                 .flatMap(Collection::stream)
                 .map(element -> element.getRegularPrice().subtract(element.getFinalPrice()))
@@ -167,21 +150,5 @@ class PaymentService {
 
     private Stream<Payment> getPaymentStream() {
         return paymentRepository.findAll().stream();
-    }
-
-    private static boolean isPaymentInGivenMonth(Payment payment, Month month) {
-        return payment.getPaymentDate().getMonth().equals(month);
-    }
-
-    private static boolean isPaymentInGivenYear(Payment payment, int year) {
-        return payment.getPaymentDate().getYear() == year;
-    }
-
-    private static Comparator<Payment> getPaymentDateComparator() {
-        return Comparator.comparing(Payment::getPaymentDate);
-    }
-
-    private static Comparator<Payment> getPaymentItemsSizeComparator() {
-        return Comparator.comparing(payment -> payment.getPaymentItems().size());
     }
 }
